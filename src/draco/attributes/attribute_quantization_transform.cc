@@ -78,29 +78,57 @@ bool AttributeQuantizationTransform::InverseTransformAttribute(
   const int32_t max_quantized_value =
       (1u << static_cast<uint32_t>(quantization_bits_)) - 1;
   const int num_components = target_attribute->num_components();
-  const int entry_size = sizeof(float) * num_components;
-  const std::unique_ptr<float[]> att_val(new float[num_components]);
   int quant_val_id = 0;
-  int out_byte_pos = 0;
   Dequantizer dequantizer;
   if (!dequantizer.Init(range_, max_quantized_value)) {
     return false;
   }
   const int32_t* const source_attribute_data = reinterpret_cast<const int32_t*>(
       attribute.GetAddress(AttributeValueIndex(0)));
+  float* const target_attribute_data = reinterpret_cast<float*>(
+      target_attribute->GetAddress(AttributeValueIndex(0)));
 
   const int num_values = target_attribute->size();
 
+  if (num_components == 3) {
+    const float min_value_0 = min_values_[0];
+    const float min_value_1 = min_values_[1];
+    const float min_value_2 = min_values_[2];
+    for (int i = 0; i < num_values; ++i) {
+      target_attribute_data[quant_val_id + 0] =
+          dequantizer.DequantizeFloat(source_attribute_data[quant_val_id + 0]) +
+          min_value_0;
+      target_attribute_data[quant_val_id + 1] =
+          dequantizer.DequantizeFloat(source_attribute_data[quant_val_id + 1]) +
+          min_value_1;
+      target_attribute_data[quant_val_id + 2] =
+          dequantizer.DequantizeFloat(source_attribute_data[quant_val_id + 2]) +
+          min_value_2;
+      quant_val_id += 3;
+    }
+    return true;
+  }
+  if (num_components == 2) {
+    const float min_value_0 = min_values_[0];
+    const float min_value_1 = min_values_[1];
+    for (int i = 0; i < num_values; ++i) {
+      target_attribute_data[quant_val_id + 0] =
+          dequantizer.DequantizeFloat(source_attribute_data[quant_val_id + 0]) +
+          min_value_0;
+      target_attribute_data[quant_val_id + 1] =
+          dequantizer.DequantizeFloat(source_attribute_data[quant_val_id + 1]) +
+          min_value_1;
+      quant_val_id += 2;
+    }
+    return true;
+  }
   for (uint32_t i = 0; i < num_values; ++i) {
     for (int c = 0; c < num_components; ++c) {
-      float value =
-          dequantizer.DequantizeFloat(source_attribute_data[quant_val_id++]);
-      value = value + min_values_[c];
-      att_val[c] = value;
+      target_attribute_data[quant_val_id] =
+          dequantizer.DequantizeFloat(source_attribute_data[quant_val_id]) +
+          min_values_[c];
+      ++quant_val_id;
     }
-    // Store the floating point value into the attribute buffer.
-    target_attribute->buffer()->Write(out_byte_pos, att_val.get(), entry_size);
-    out_byte_pos += entry_size;
   }
   return true;
 }

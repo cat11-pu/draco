@@ -61,7 +61,20 @@ class PredictionSchemeWrapTransformBase {
 
   inline const DataTypeT* ClampPredictedValue(
       const DataTypeT* predicted_val) const {
-    for (int i = 0; i < this->num_components(); ++i) {
+    const int num_components = this->num_components();
+    if (num_components == 3) {
+      for (int i = 0; i < 3; ++i) {
+        if (predicted_val[i] > max_value_) {
+          clamped_value_[i] = max_value_;
+        } else if (predicted_val[i] < min_value_) {
+          clamped_value_[i] = min_value_;
+        } else {
+          clamped_value_[i] = predicted_val[i];
+        }
+      }
+      return clamped_value_.data();
+    }
+    for (int i = 0; i < num_components; ++i) {
       if (predicted_val[i] > max_value_) {
         clamped_value_[i] = max_value_;
       } else if (predicted_val[i] < min_value_) {

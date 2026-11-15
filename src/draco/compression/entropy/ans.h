@@ -401,12 +401,6 @@ class RAnsEncoder {
   AnsCoder ans_;
 };
 
-struct rans_dec_sym {
-  uint32_t val;
-  uint32_t prob;
-  uint32_t cum_prob;  // not-inclusive.
-};
-
 // Class for performing rANS decoding using a desired number of precision bits.
 // The number of precision bits needs to be the same as with the RAnsEncoder
 // that was used to encode the input data.
@@ -465,7 +459,6 @@ class RAnsDecoder {
   inline int rans_read() {
     unsigned rem;
     unsigned quo;
-    struct rans_dec_sym sym;
     while (ans_.state < l_rans_base && ans_.buf_offset > 0) {
       ans_.state = ans_.state * DRACO_ANS_IO_BASE + ans_.buf[--ans_.buf_offset];
     }
@@ -473,9 +466,15 @@ class RAnsDecoder {
     // division and modulo are going to be optimized by the compiler.
     quo = ans_.state / rans_precision;
     rem = ans_.state % rans_precision;
-    fetch_sym(&sym, rem);
-    ans_.state = quo * sym.prob + rem - sym.cum_prob;
-    return sym.val;
+    // Each LUT entry packs the symbol value, probability, and cumulative
+    // probability so decoding needs only one dependent table lookup.
+    const uint64_t entry = lut_table_[rem];
+    const uint32_t probability = static_cast<uint32_t>(
+        (entry >> kSymbolValueBits) & ((rans_precision << 1) - 1));
+    const uint32_t cumulative_probability = static_cast<uint32_t>(
+        entry >> (kSymbolValueBits + rans_precision_bits_t + 1));
+    ans_.state = quo * probability + rem - cumulative_probability;
+    return static_cast<uint32_t>(entry & kSymbolValueMask);
   }
 
   // Construct a lookup table with |rans_precision| number of entries.
@@ -483,18 +482,24 @@ class RAnsDecoder {
   inline bool rans_build_look_up_table(const uint32_t token_probs[],
                                        uint32_t num_symbols) {
     lut_table_.resize(rans_precision);
-    probability_table_.resize(num_symbols);
     uint32_t cum_prob = 0;
     uint32_t act_prob = 0;
+    if (num_symbols > (1u << kSymbolValueBits)) {
+      return false;
+    }
     for (uint32_t i = 0; i < num_symbols; ++i) {
-      probability_table_[i].prob = token_probs[i];
-      probability_table_[i].cum_prob = cum_prob;
+      const uint32_t prob = token_probs[i];
+      const uint64_t entry =
+          static_cast<uint64_t>(i) |
+          (static_cast<uint64_t>(prob) << kSymbolValueBits) |
+          (static_cast<uint64_t>(cum_prob)
+           << (kSymbolValueBits + rans_precision_bits_t + 1));
       cum_prob += token_probs[i];
       if (cum_prob > rans_precision) {
         return false;
       }
       for (uint32_t j = act_prob; j < cum_prob; ++j) {
-        lut_table_[j] = i;
+        lut_table_[j] = entry;
       }
       act_prob = cum_prob;
     }
@@ -505,17 +510,13 @@ class RAnsDecoder {
   }
 
  private:
-  inline void fetch_sym(struct rans_dec_sym* out, uint32_t rem) {
-    uint32_t symbol = lut_table_[rem];
-    out->val = symbol;
-    out->prob = probability_table_[symbol].prob;
-    out->cum_prob = probability_table_[symbol].cum_prob;
-  }
-
+  // The maximum number of unique symbols is 2^18 (see EncodeRawSymbols).
+  static constexpr int kSymbolValueBits = 18;
+  static constexpr uint32_t kSymbolValueMask =
+      (1u << kSymbolValueBits) - 1;
   static constexpr int rans_precision = 1 << rans_precision_bits_t;
   static constexpr int l_rans_base = rans_precision * 4;
-  std::vector<uint32_t> lut_table_;
-  std::vector<rans_sym> probability_table_;
+  std::vector<uint64_t> lut_table_;
   AnsDecoder ans_;
 };
 

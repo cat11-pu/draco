@@ -142,6 +142,40 @@ bool MeshAttributeCornerTable::RecomputeVerticesInternal(
   DRACO_DCHECK(GetValenceCache().IsCacheEmpty());
   vertex_to_attribute_entry_id_map_.clear();
   vertex_to_left_most_corner_map_.clear();
+  if (no_interior_seams_) {
+    const int num_base_vertices = corner_table_->num_vertices();
+    std::vector<int32_t> base_vertex_to_attribute_vertex(num_base_vertices,
+                                                         -1);
+    int num_new_vertices = 0;
+    for (VertexIndex v(0); v < num_base_vertices; ++v) {
+      const CornerIndex c = corner_table_->LeftMostCorner(v);
+      if (c == kInvalidCornerIndex) {
+        continue;
+      }
+      const int attribute_vertex = num_new_vertices++;
+      base_vertex_to_attribute_vertex[v.value()] = attribute_vertex;
+      if (init_vertex_to_attribute_entry_map) {
+        const PointIndex point_id = mesh->CornerToPointId(c.value());
+        vertex_to_attribute_entry_id_map_.push_back(
+            att->mapped_index(point_id));
+      } else {
+        vertex_to_attribute_entry_id_map_.push_back(
+            AttributeValueIndex(attribute_vertex));
+      }
+      vertex_to_left_most_corner_map_.push_back(c);
+    }
+    corner_to_vertex_map_.resize(corner_table_->num_corners());
+    for (CornerIndex c(0); c < corner_table_->num_corners(); ++c) {
+      const VertexIndex v = corner_table_->Vertex(c);
+      if (v == kInvalidVertexIndex) {
+        corner_to_vertex_map_[c.value()] = kInvalidVertexIndex;
+        continue;
+      }
+      corner_to_vertex_map_[c.value()] =
+          VertexIndex(base_vertex_to_attribute_vertex[v.value()]);
+    }
+    return true;
+  }
   int num_new_vertices = 0;
   for (VertexIndex v(0); v < corner_table_->num_vertices(); ++v) {
     const CornerIndex c = corner_table_->LeftMostCorner(v);

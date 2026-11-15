@@ -22,6 +22,14 @@
 
 namespace draco {
 
+// Cached list of corners that were visited as new vertices during a mesh
+// traversal. Multiple attributes that share the same connectivity can replay
+// this list instead of traversing the mesh again.
+struct MeshTraversalSequenceCache {
+  std::vector<CornerIndex> corner_order;
+  bool valid = false;
+};
+
 // Sequencer that generates point sequence in an order given by a deterministic
 // traversal on the mesh surface. Note that all attributes encoded with this
 // sequence must share the same connectivity.
@@ -43,6 +51,10 @@ class MeshTraversalSequencer : public PointsSequencer {
   // corners are processed sequentially based on their ids.
   void SetCornerOrder(const std::vector<CornerIndex>& corner_order) {
     corner_order_ = &corner_order;
+  }
+
+  void SetSequenceCache(MeshTraversalSequenceCache* cache) {
+    sequence_cache_ = cache;
   }
 
   bool UpdatePointToAttributeIndexMapping(PointAttribute* attribute) override {
@@ -79,6 +91,18 @@ class MeshTraversalSequencer : public PointsSequencer {
     out_point_ids()->reserve(traverser_.corner_table()->num_vertices());
 
     traverser_.OnTraversalStart();
+    if (sequence_cache_ != nullptr && sequence_cache_->valid) {
+      const auto* const corner_table = traverser_.corner_table();
+      for (const CornerIndex corner : sequence_cache_->corner_order) {
+        const VertexIndex vertex = corner_table->Vertex(corner);
+        if (vertex == kInvalidVertexIndex) {
+          return false;
+        }
+        traverser_.traversal_observer().OnNewVertexVisited(vertex, corner);
+      }
+      traverser_.OnTraversalEnd();
+      return true;
+    }
     if (corner_order_) {
       for (uint32_t i = 0; i < corner_order_->size(); ++i) {
         if (!ProcessCorner(corner_order_->at(i))) {
@@ -94,6 +118,11 @@ class MeshTraversalSequencer : public PointsSequencer {
       }
     }
     traverser_.OnTraversalEnd();
+    if (sequence_cache_ != nullptr) {
+      sequence_cache_->corner_order =
+          encoding_data_->encoded_attribute_value_index_to_corner_map;
+      sequence_cache_->valid = true;
+    }
     return true;
   }
 
@@ -106,6 +135,7 @@ class MeshTraversalSequencer : public PointsSequencer {
   const Mesh* mesh_;
   const MeshAttributeIndicesEncodingData* encoding_data_;
   const std::vector<CornerIndex>* corner_order_;
+  MeshTraversalSequenceCache* sequence_cache_ = nullptr;
 };
 
 }  // namespace draco

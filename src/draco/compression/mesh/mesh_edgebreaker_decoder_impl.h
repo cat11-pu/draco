@@ -71,7 +71,8 @@ class MeshEdgebreakerDecoderImpl : public MeshEdgebreakerDecoderImplInterface {
   // Creates a vertex traversal sequencer for the specified |TraverserT| type.
   template <class TraverserT>
   std::unique_ptr<PointsSequencer> CreateVertexTraversalSequencer(
-      MeshAttributeIndicesEncodingData* encoding_data);
+      MeshAttributeIndicesEncodingData* encoding_data,
+      MeshTraversalSequenceCache* sequence_cache);
 
   // Decodes connectivity between vertices (vertex indices).
   // Returns the number of vertices created by the decoder or -1 on error.
@@ -217,8 +218,14 @@ class MeshEdgebreakerDecoderImpl : public MeshEdgebreakerDecoderImplInterface {
     MeshAttributeIndicesEncodingData encoding_data;
     // Opposite corners to attribute seam edges.
     std::vector<int32_t> attribute_seam_corners;
+    // Cached traversal order shared by decoders that use this connectivity.
+    MeshTraversalSequenceCache traversal_cache;
   };
   std::vector<AttributeData> attribute_data_;
+
+  // Cached traversal orders for per-vertex attribute decoders. The index is
+  // the traversal method (depth first or prediction degree).
+  MeshTraversalSequenceCache vertex_traversal_caches_[2];
 
   TraversalDecoderT traversal_decoder_;
 };

@@ -65,22 +65,30 @@ bool MeshPredictionSchemeParallelogramDecoder<DataTypeT, TransformT,
       this->mesh_data().vertex_to_data_map();
 
   // For storage of prediction values (already initialized to zero).
-  std::unique_ptr<DataTypeT[]> pred_vals(new DataTypeT[num_components]());
+  DataTypeT pred_vals_buffer[4] = {};
+  std::unique_ptr<DataTypeT[]> pred_vals_storage;
+  DataTypeT* pred_vals = pred_vals_buffer;
+  if (num_components > 4) {
+    pred_vals_storage.reset(new DataTypeT[num_components]());
+    pred_vals = pred_vals_storage.get();
+  }
 
   // Restore the first value.
-  this->transform().ComputeOriginalValue(pred_vals.get(), in_corr, out_data);
+  this->transform().ComputeOriginalValue(pred_vals, in_corr, out_data);
 
+  const std::vector<CornerIndex>& data_to_corner_map =
+      *this->mesh_data().data_to_corner_map();
   const int corner_map_size =
-      static_cast<int>(this->mesh_data().data_to_corner_map()->size());
+      static_cast<int>(data_to_corner_map.size());
   if (corner_map_size * num_components > size) {
     return false;
   }
   for (int p = 1; p < corner_map_size; ++p) {
-    const CornerIndex corner_id = this->mesh_data().data_to_corner_map()->at(p);
+    const CornerIndex corner_id = data_to_corner_map[p];
     const int dst_offset = p * num_components;
     if (!ComputeParallelogramPrediction(p, corner_id, table,
                                         *vertex_to_data_map, out_data,
-                                        num_components, pred_vals.get())) {
+                                        num_components, pred_vals)) {
       // Parallelogram could not be computed, Possible because some of the
       // vertices are not valid (not encoded yet).
       // We use the last encoded point as a reference (delta coding).
@@ -90,7 +98,7 @@ bool MeshPredictionSchemeParallelogramDecoder<DataTypeT, TransformT,
     } else {
       // Apply the parallelogram prediction.
       this->transform().ComputeOriginalValue(
-          pred_vals.get(), in_corr + dst_offset, out_data + dst_offset);
+          pred_vals, in_corr + dst_offset, out_data + dst_offset);
     }
   }
   return true;

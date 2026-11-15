@@ -46,19 +46,15 @@ class PredictionSchemeWrapDecodingTransform
 
     predicted_vals = this->ClampPredictedValue(predicted_vals);
 
-    // The sum is computed in int64_t, where it is exact. The encoder keeps each
-    // correction within half of the span, so the sum lies at most one span
-    // outside [min, max] and a single wrap gives the original value. Malformed
-    // corrections cannot overflow int64_t either.
-    for (int i = 0; i < this->num_components(); ++i) {
-      int64_t value = static_cast<int64_t>(predicted_vals[i]) +
-                      static_cast<int64_t>(corr_vals[i]);
-      if (value > this->max_value()) {
-        value -= this->max_dif();
-      } else if (value < this->min_value()) {
-        value += this->max_dif();
-      }
-      out_original_vals[i] = static_cast<DataTypeT>(value);
+    const int num_components = this->num_components();
+    if (num_components == 3) {
+      out_original_vals[0] = Unwrap(predicted_vals[0], corr_vals[0]);
+      out_original_vals[1] = Unwrap(predicted_vals[1], corr_vals[1]);
+      out_original_vals[2] = Unwrap(predicted_vals[2], corr_vals[2]);
+      return;
+    }
+    for (int i = 0; i < num_components; ++i) {
+      out_original_vals[i] = Unwrap(predicted_vals[i], corr_vals[i]);
     }
   }
 
@@ -79,6 +75,22 @@ class PredictionSchemeWrapDecodingTransform
       return false;
     }
     return true;
+  }
+
+ private:
+  inline DataTypeT Unwrap(DataTypeT predicted, CorrTypeT correction) const {
+    // The sum is computed in int64_t, where it is exact. The encoder keeps each
+    // correction within half of the span, so the sum lies at most one span
+    // outside [min, max] and a single wrap gives the original value. Malformed
+    // corrections cannot overflow int64_t either.
+    int64_t value = static_cast<int64_t>(predicted) +
+                    static_cast<int64_t>(correction);
+    if (value > this->max_value()) {
+      value -= this->max_dif();
+    } else if (value < this->min_value()) {
+      value += this->max_dif();
+    }
+    return static_cast<DataTypeT>(value);
   }
 };
 

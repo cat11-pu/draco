@@ -107,13 +107,15 @@ template <class TraversalDecoder>
 template <class TraverserT>
 std::unique_ptr<PointsSequencer>
 MeshEdgebreakerDecoderImpl<TraversalDecoder>::CreateVertexTraversalSequencer(
-    MeshAttributeIndicesEncodingData* encoding_data) {
+    MeshAttributeIndicesEncodingData* encoding_data,
+    MeshTraversalSequenceCache* sequence_cache) {
   typedef typename TraverserT::TraversalObserver AttObserver;
   typedef typename TraverserT::CornerTable CornerTable;
 
   const Mesh* mesh = decoder_->mesh();
   std::unique_ptr<MeshTraversalSequencer<TraverserT>> traversal_sequencer(
       new MeshTraversalSequencer<TraverserT>(mesh, encoding_data));
+  traversal_sequencer->SetSequenceCache(sequence_cache);
 
   AttObserver att_observer(corner_table_.get(), mesh, traversal_sequencer.get(),
                            encoding_data);
@@ -191,11 +193,14 @@ bool MeshEdgebreakerDecoderImpl<TraversalDecoder>::CreateAttributesDecoder(
       typedef MeshAttributeIndicesEncodingObserver<CornerTable> AttObserver;
       typedef MaxPredictionDegreeTraverser<CornerTable, AttObserver>
           AttTraverser;
-      sequencer = CreateVertexTraversalSequencer<AttTraverser>(encoding_data);
+      sequencer = CreateVertexTraversalSequencer<AttTraverser>(
+          encoding_data,
+          &vertex_traversal_caches_[MESH_TRAVERSAL_PREDICTION_DEGREE]);
     } else if (traversal_method == MESH_TRAVERSAL_DEPTH_FIRST) {
       typedef MeshAttributeIndicesEncodingObserver<CornerTable> AttObserver;
       typedef DepthFirstTraverser<CornerTable, AttObserver> AttTraverser;
-      sequencer = CreateVertexTraversalSequencer<AttTraverser>(encoding_data);
+      sequencer = CreateVertexTraversalSequencer<AttTraverser>(
+          encoding_data, &vertex_traversal_caches_[MESH_TRAVERSAL_DEPTH_FIRST]);
     } else {
       return false;  // Unsupported method
     }
@@ -221,6 +226,8 @@ bool MeshEdgebreakerDecoderImpl<TraversalDecoder>::CreateAttributesDecoder(
 
     std::unique_ptr<MeshTraversalSequencer<AttTraverser>> traversal_sequencer(
         new MeshTraversalSequencer<AttTraverser>(mesh, encoding_data));
+    traversal_sequencer->SetSequenceCache(
+        &attribute_data_[att_data_id].traversal_cache);
 
     AttObserver att_observer(corner_table, mesh, traversal_sequencer.get(),
                              encoding_data);
@@ -1187,10 +1194,41 @@ bool MeshEdgebreakerDecoderImpl<TraversalDecoder>::AssignPointsToCorners(
   }
   // Else we need to deduplicate multiple attributes.
 
+  bool all_attributes_without_interior_seams = true;
+  for (uint32_t i = 0; i < attribute_data_.size(); ++i) {
+    if (!attribute_data_[i].connectivity_data.no_interior_seams()) {
+      all_attributes_without_interior_seams = false;
+      break;
+    }
+  }
+  if (all_attributes_without_interior_seams) {
+    std::vector<int32_t> vertex_to_point(corner_table_->num_vertices(), -1);
+    uint32_t num_points = 0;
+    for (int v = 0; v < corner_table_->num_vertices(); ++v) {
+      if (corner_table_->LeftMostCorner(VertexIndex(v)) ==
+          kInvalidCornerIndex) {
+        continue;
+      }
+      vertex_to_point[v] = static_cast<int32_t>(num_points++);
+    }
+    for (FaceIndex f(0); f < decoder_->mesh()->num_faces(); ++f) {
+      Mesh::Face face;
+      const CornerIndex start_corner(3 * f.value());
+      for (int c = 0; c < 3; ++c) {
+        const VertexIndex vertex = corner_table_->Vertex(start_corner + c);
+        face[c] = PointIndex(vertex_to_point[vertex.value()]);
+      }
+      decoder_->mesh()->SetFace(f, face);
+    }
+    decoder_->point_cloud()->set_num_points(num_points);
+    return true;
+  }
+
   // Map between point id and an associated corner id. Only one corner for
   // each point is stored. The corners are used to sample the attribute values
   // in the last stage of the deduplication.
   std::vector<int32_t> point_to_corner_map;
+  point_to_corner_map.reserve(corner_table_->num_vertices());
   // Map between every corner and their new point ids.
   std::vector<int32_t> corner_to_point_map(corner_table_->num_corners());
   for (int v = 0; v < corner_table_->num_vertices(); ++v) {
