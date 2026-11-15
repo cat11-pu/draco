@@ -1106,6 +1106,13 @@ else()
       INCLUDES ${draco_include_paths}
       LIB_DEPS ${draco_dependency})
 
+    draco_add_executable(
+      NAME draco_decoder_property_test
+      SOURCES "${draco_src_root}/tools/draco_decoder_property_test.cc"
+      DEFINES ${draco_defines}
+      INCLUDES ${draco_include_paths}
+      LIB_DEPS ${draco_dependency})
+
     if(DRACO_TRANSCODER_SUPPORTED)
       draco_add_executable(
         NAME draco_transcoder
