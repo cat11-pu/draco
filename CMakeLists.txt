@@ -150,6 +150,11 @@ list(
     "${draco_src_root}/compression/attributes/sequential_quantization_attribute_encoder.h"
 )
 
+list(
+  APPEND
+    draco_compression_attributes_block_sources
+    "${draco_src_root}/compression/attributes/spatial_block_attribute_codec.cc"
+    "${draco_src_root}/compression/attributes/spatial_block_attribute_codec.h")
 
 list(
   APPEND
@@ -626,6 +631,7 @@ if(EMSCRIPTEN AND DRACO_JS_GLUE)
     APPEND draco_decoder_src
            ${draco_attributes_sources}
            ${draco_compression_attributes_dec_sources}
+           ${draco_compression_attributes_block_sources}
            ${draco_compression_attributes_pred_schemes_dec_sources}
            ${draco_compression_bit_coders_sources}
            ${draco_compression_decode_sources}
@@ -647,6 +653,7 @@ if(EMSCRIPTEN AND DRACO_JS_GLUE)
     APPEND draco_encoder_src
            ${draco_attributes_sources}
            ${draco_compression_attributes_enc_sources}
+           ${draco_compression_attributes_block_sources}
            ${draco_compression_attributes_pred_schemes_enc_sources}
            ${draco_compression_bit_coders_sources}
            ${draco_compression_encode_sources}
@@ -735,6 +742,12 @@ else()
     NAME draco_compression_attributes_enc
     TYPE OBJECT
     SOURCES ${draco_compression_attributes_enc_sources}
+    DEFINES ${draco_defines}
+    INCLUDES ${draco_include_paths})
+  draco_add_library(
+    NAME draco_compression_attributes_block
+    TYPE OBJECT
+    SOURCES ${draco_compression_attributes_block_sources}
     DEFINES ${draco_defines}
     INCLUDES ${draco_include_paths})
   draco_add_library(
@@ -946,6 +959,7 @@ else()
            draco_attributes
            draco_compression_attributes_dec
            draco_compression_attributes_enc
+           draco_compression_attributes_block
            draco_compression_attributes_pred_schemes_dec
            draco_compression_attributes_pred_schemes_enc
            draco_compression_bit_coders
