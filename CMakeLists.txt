@@ -440,6 +440,8 @@ list(
          "${draco_src_root}/mesh/mesh_misc_functions.h"
          "${draco_src_root}/mesh/mesh_stripifier.cc"
          "${draco_src_root}/mesh/mesh_stripifier.h"
+         "${draco_src_root}/mesh/spatial_mesh_stream.cc"
+         "${draco_src_root}/mesh/spatial_mesh_stream.h"
          "${draco_src_root}/mesh/triangle_soup_mesh_builder.cc"
          "${draco_src_root}/mesh/triangle_soup_mesh_builder.h"
          "${draco_src_root}/mesh/valence_cache.h")

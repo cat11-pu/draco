@@ -16,8 +16,13 @@
 #define DRACO_CORE_OPTIONS_H_
 
 #include <cstdlib>
+#include <iomanip>
+#include <limits>
+#include <locale>
 #include <map>
+#include <sstream>
 #include <string>
+#include <type_traits>
 
 #include "draco/draco_features.h"
 
@@ -81,9 +86,23 @@ template <typename DataTypeT>
 void Options::SetVector(const std::string& name, const DataTypeT* vec,
                         int num_dims) {
   std::string out;
+  std::ostringstream float_stream;
+  if (std::is_floating_point<DataTypeT>::value) {
+    // Quantization origins/ranges must round-trip exactly between chunks.
+    float_stream.imbue(std::locale::classic());
+    float_stream << std::setprecision(
+        std::numeric_limits<DataTypeT>::max_digits10);
+  }
   for (int i = 0; i < num_dims; ++i) {
     if (i > 0) {
       out += " ";
+    }
+
+    if (std::is_floating_point<DataTypeT>::value) {
+      float_stream.str(std::string());
+      float_stream << vec[i];
+      out += float_stream.str();
+      continue;
     }
 
 // GNU STL on android doesn't include a proper std::to_string, but the libc++

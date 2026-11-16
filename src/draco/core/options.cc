@@ -15,7 +15,11 @@
 #include "draco/core/options.h"
 
 #include <cstdlib>
+#include <iomanip>
+#include <limits>
+#include <locale>
 #include <set>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -32,7 +36,11 @@ void Options::SetInt(const std::string& name, int val) {
 }
 
 void Options::SetFloat(const std::string& name, float val) {
-  options_[name] = std::to_string(val);
+  // Keep enough precision for explicit quantization parameters to round-trip.
+  std::ostringstream stream;
+  stream.imbue(std::locale::classic());
+  stream << std::setprecision(std::numeric_limits<float>::max_digits10) << val;
+  options_[name] = stream.str();
 }
 
 void Options::SetBool(const std::string& name, bool val) {

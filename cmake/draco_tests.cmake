@@ -70,6 +70,7 @@ list(
     "${draco_src_root}/mesh/corner_table_test.cc"
     "${draco_src_root}/mesh/mesh_are_equivalent_test.cc"
     "${draco_src_root}/mesh/mesh_cleanup_test.cc"
+    "${draco_src_root}/mesh/spatial_mesh_stream_test.cc"
     "${draco_src_root}/mesh/triangle_soup_mesh_builder_test.cc"
     "${draco_src_root}/metadata/metadata_encoder_test.cc"
     "${draco_src_root}/metadata/metadata_test.cc"
